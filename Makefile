@@ -81,12 +81,14 @@ CPP		=	$(CROSS_COMPILE)cpp
 AR		=	$(CROSS_COMPILE)ar
 LD		=	$(CROSS_COMPILE)ld
 OBJCOPY		=	$(CROSS_COMPILE)objcopy
+OBJDUMP		=	$(CROSS_COMPILE)objdump
 else
 CC		?=	gcc
 CPP		?=	cpp
 AR		?=	ar
 LD		?=	ld
 OBJCOPY		?=	objcopy
+OBJDUMP		?=	objdump
 endif
 AS		=	$(CC)
 DTC		=	dtc
@@ -134,6 +136,7 @@ firmware-bins-path-y=$(foreach bin,$(firmware-bins-y),$(platform_build_dir)/firm
 endif
 firmware-elfs-path-y=$(firmware-bins-path-y:.bin=.elf)
 firmware-objs-path-y=$(firmware-bins-path-y:.bin=.o)
+firmware-asm-path-y=$(firmware-bins-path-y:.bin=.asm)
 
 # Setup list of deps files for objects
 deps-y=$(platform-objs-path-y:.o=.dep)
@@ -158,6 +161,10 @@ endif
 
 # Setup compilation commands flags
 GENFLAGS	=	-I$(platform_src_dir)/include
+GENFLAGS	+=	-I$(platform_src_dir)/drivers/inc
+GENFLAGS	+=	-I$(platform_src_dir)
+GENFLAGS	+=	-I$(platform_src_dir)/soc/ip
+GENFLAGS	+=	-I$(platform_src_dir)/soc/HPM6360
 GENFLAGS	+=	-I$(include_dir)
 ifneq ($(OPENSBI_VERSION_GIT),)
 GENFLAGS	+=	-DOPENSBI_VERSION_GIT="\"$(OPENSBI_VERSION_GIT)\""
@@ -252,13 +259,16 @@ compile_as = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     $(AS) $(ASFLAGS) $(call dynamic_flags,$(1),$(2)) -c $(2) -o $(1)
 compile_elf = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " ELF       $(subst $(build_dir)/,,$(1))"; \
-	     $(CC) $(CFLAGS) $(3) $(ELFFLAGS) -Wl,-T$(2) -o $(1)
+	     $(CC) $(CFLAGS) $(3) $(ELFFLAGS) -Wl,-T$(2) -o $(1) -Wl,-Map=$(1).map
 compile_ar = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " AR        $(subst $(build_dir)/,,$(1))"; \
 	     $(AR) $(ARFLAGS) $(1) $(2)
 compile_objcopy = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " OBJCOPY   $(subst $(build_dir)/,,$(1))"; \
 	     $(OBJCOPY) -S -O binary $(2) $(1)
+compile_objdump = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
+	     echo " OBJDUMP   $(subst $(build_dir)/,,$(1))"; \
+	     $(OBJDUMP) -S -d $(1) > $(2)
 compile_dts = $(CMD_PREFIX)mkdir -p `dirname $(1)`; \
 	     echo " DTC       $(subst $(build_dir)/,,$(1))"; \
 	     $(DTC) $(DTCFLAGS) -o $(1) $(2)
@@ -270,13 +280,17 @@ targets-y += $(platform_build_dir)/lib/libplatsbi.a
 targets-y += $(platform-dtb-path-y)
 endif
 targets-y += $(firmware-bins-path-y)
+targets-y += $(firmware-asm-path-y)
 
 # Default rule "make" should always be first rule
 .PHONY: all
 all: $(targets-y)
-
+	
 # Preserve all intermediate files
 .SECONDARY:
+
+$(build_dir)/%.asm: $(build_dir)/%.elf
+	$(call compile_objdump,$<,$@)
 
 $(build_dir)/%.bin: $(build_dir)/%.elf
 	$(call compile_objcopy,$@,$<)
