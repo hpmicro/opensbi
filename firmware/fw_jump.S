@@ -44,7 +44,11 @@ fw_save_info:
 	 * The previous arg1 should be returned in 'a0'.
 	 */
 fw_prev_arg1:
+#ifdef FW_JUMP_FDT_ADDR
+	la	a0, FW_JUMP_FDT_ADDR
+#else
 	add	a0, zero, zero
+#endif
 	ret
 
 	.section .entry, "ax", %progbits
